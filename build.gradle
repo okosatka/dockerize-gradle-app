@@ -1,0 +1,61 @@
+import org.apache.tools.ant.filters.ReplaceTokens
+
+buildscript {
+    repositories {
+        jcenter()
+    }
+
+    dependencies {
+        classpath 'eu.appsatori:gradle-fatjar-plugin:0.3'
+    }
+}
+
+apply plugin: 'java'
+apply plugin: 'eu.appsatori.fatjar'
+
+group = "org.glassfish.jersey.doockerize"
+version = "1.0.0-SNAPSHOT"
+
+fatJar {
+    manifest {
+        attributes 'Main-Class': 'org.glassfish.jersey.examples.helloworld.App'
+    }
+}
+
+ext {
+    jerseyVersion = "2.14"
+    baseImage = "dockerfile/ubuntu"
+    port = "4004"
+}
+
+repositories {
+    mavenLocal()
+    jcenter()
+}
+
+dependencies {
+    compile "org.glassfish.jersey.containers:jersey-container-grizzly2-http:${jerseyVersion}"
+}
+
+// resources filtering
+processResources {
+    filter(ReplaceTokens, tokens: [PORT: port])
+
+}
+
+task dockerize(type: Copy, dependsOn: tasks.fatJar) {
+    from 'src/main/dist/Dockerfile'
+    into "${buildDir}/dockerize"
+    filter(ReplaceTokens, tokens: [APP_NAME   : project.name,
+                                   APP_VERSION: project.version,
+                                   BASE_IMAGE : baseImage,
+                                   PORT       : port])
+}
+
+task distribution(type: Copy) {
+    from project.tasks.fatJar.archivePath
+    from new File(project.buildDir, 'dockerize/Dockerfile')
+    into "${buildDir}/distribution"
+
+    dependsOn dockerize, project.tasks.fatJar
+}
